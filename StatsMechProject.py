@@ -15,7 +15,8 @@ import random
 window_h_w = 700
 s = 70
 pr = 5
-speed = 5
+speed = 1
+
 
 
 class Point():
@@ -62,17 +63,20 @@ def show_system(particles):
 
     window.title('Lattice')
     window.geometry( str(window_h_w)+"x" + str(window_h_w) + "+10+10")
+    frame = 0
     while True:
+        #print(frame)
         id_list = [0 for i in particles]
         for i in range(0, len(particles)):
             p = particles[i]
             id_list[i] = Point(c, p.pos)
         window.update_idletasks()
         window.update()
-        time.sleep(0.01)
+        #time.sleep(0.0001)
         #for p in id_list:
           #  c.delete(p)
         c.delete('all')
-        print(len(particles))
+        #print(len(particles))
         particles = update_position(particles)
+        #frame +=1
     return "End"
