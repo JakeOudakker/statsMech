@@ -37,7 +37,7 @@ def initialize_lattice():
         print(part)
     return particles
 
-def update_position(particles):
+"""def update_position(particles):
     for p in particles:
         xr = random.random()
         yr = random.random()
@@ -54,7 +54,45 @@ def update_position(particles):
         else:
             yc = -0.01 * speed
         p.update_pos(p.pos, (xc, yc))
-    return particles
+    return particles"""
+
+def update_position(particles):
+    return ""
+
+def calc_forces(particles):
+    forces = [0 for i in particles]
+    for i in range(0, len(particles)):
+        copy_particles = particles.copy()
+        reduced_particles = copy_particles[:i] + copy_particles[i+1:]
+        #print(len(reduced_particles))
+        force_x = 0
+        force_y = 0
+        for rp in reduced_particles:
+            dif_x = particles[i].pos[0] - rp.pos[0]
+            dif_y = particles[i].pos[1] - rp.pos[1]
+            force_x += f_x((dif_x, dif_y))
+            force_y += f_y((dif_x, dif_y))
+        forces[i] = (force_x, force_y)
+    return forces
+    
+    
+"""
+Takes the difference in the x and y positions between 2 particles
+"""
+def f_x(pos):
+    r2 = pos[0]**2 + pos[1]**2
+    return 12*pos[0]*((1/r2**7) - (1/r2**4))
+
+
+"""
+Takes the difference in the x and y positions between 2 particles
+"""
+def f_y(pos):
+    r2 = pos[0]**2 + pos[1]**2
+    return 12*pos[1]*((1/r2**7) - (1/r2**4))
+
+def update_all(particles):
+    return ""
 
 def show_system(particles):
     window = Tk()
@@ -63,7 +101,7 @@ def show_system(particles):
 
     window.title('Lattice')
     window.geometry( str(window_h_w)+"x" + str(window_h_w) + "+10+10")
-    frame = 0
+    #frame = 0
     while True:
         #print(frame)
         id_list = [0 for i in particles]
