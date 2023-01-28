@@ -18,6 +18,7 @@ def new_pos(pos, posc):
     else:
         ynew = pos[1] + posc[1]
     return (xnew, ynew)
+
 class Particle():
     def __init__(self, pos, velocity):
         self.pos = pos
@@ -27,8 +28,11 @@ class Particle():
         return "Position: (" + str((self.pos)[0]) + ", " + str((self.pos)[1]) + ")\nVelocity: (" + str((self.vel)[0]) + ", " + str((self.vel)[1]) + ")"
     
     
-    def update_pos(self, pos, posc):
-        pos_new = new_pos(pos, posc)
+    def update_pos(self, posc):
+        pos_new = new_pos(self.pos, posc)
         self.pos = pos_new
+        
+    def update_vel(self, vel):
+        self.vel = vel
         
     
