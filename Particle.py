@@ -30,7 +30,7 @@ class Particle():
         self.vel = velocity
         
     def __str__(self):
-        return "Velocity: (" + str((self.vel)[0]) + ", " + str((self.vel)[1]) + ")"
+        return "Position: (" + str(self.pos[0]) + ", " + str(self.pos[1]) + ")\n" + "Velocity: (" + str((self.vel)[0]) + ", " + str((self.vel)[1]) + ")"
     
     
     def update_pos(self, posc):

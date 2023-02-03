@@ -12,9 +12,13 @@ import time
 import random
 #import msvcrt
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+from matplotlib.colors import LogNorm, Normalize
+from scipy.odr import ODR, Model, Data, RealData
 import copy
 import seaborn as sns
 from tqdm import trange, tqdm
+import numpy as np
 
 
 
@@ -24,6 +28,7 @@ from tqdm import trange, tqdm
 pr = 10*(r0/70)  #point radius
 dt = .001 #time step
 speed_bin_size = 0.001
+R = 2
 
 
 ######### Calculations Functions ##############
@@ -168,6 +173,21 @@ def find_speed(particles, speed_dict):
         else:
             speed_dict[bin_number] = 1 
     return speed_dict
+
+def scale_vel(particles):
+    print("scale vel")
+    for p in particles:
+        p.update_vel((p.vel[0] * R, p.vel[1]*R))
+    return particles
+        
+def scale_pos(particles, old_particles):
+    print("scale pos")
+    for i in range(len(particles)):
+        p = particles[i]
+        op = old_particles[i]
+        p.update_pos(((p.pos[0] - R*(p.pos[0] - op.pos[0])),(p.pos[1] - R*(p.pos[1]-op.pos[1]))))
+    return particles
+        
     
 ######## Simulate and Run (Slow) ###########
 
@@ -216,6 +236,30 @@ def show_system(particles, pause=False, steps = 40000):
         time_step+=1
     return plist #Elist, dtlist, speed_ct
 
+def show_melt(particles, steps=100000):
+    window = Tk()
+    c = Canvas(master=window, bg='black',height=window_h_w, width=window_h_w)
+    c.pack()
+    window.title('Lattice')
+    window.geometry( str(window_h_w)+"x" + str(window_h_w) + "+10+10")
+    plist = []
+    for i in trange(steps):
+        id_list = [0 for k in particles]
+        for j in range(0, len(particles)):
+            p = particles[j]
+            id_list[j] = Point(c, p.pos)
+        window.update_idletasks()
+        window.update()
+        c.delete('all')
+        copyofparticles = copy.deepcopy(particles)
+        plist.append(copyofparticles)
+        particles = hybrid_1_update_all(particles)
+        #if (i+1) % 1000 == 0 and i < 5500:
+            #particles = scale_vel(particles)
+            #particles = scale_pos(particles, copyofparticles)
+    window.destroy()
+    return plist
+
 ########## Visuals ###########
 
 class Point():
@@ -239,6 +283,17 @@ def bake_sim(particles, steps = 40000):
         particles = hybrid_1_update_all(particles)
     return plist
 
+def bake_melt(particles, steps = 40000):
+    plist = []
+    for i in trange(steps):
+        copyofparticles = copy.deepcopy(particles)
+        plist.append(copyofparticles)
+        particles = hybrid_1_update_all(particles)
+        if i % 10001 == 0:
+            particles = scale_vel(particles)
+            particles = scale_pos(particles, copyofparticles)
+    return plist
+
 def resimulate(plist):
     window = Tk()
     c = Canvas(master=window, bg='black',height=window_h_w, width=window_h_w)
@@ -253,7 +308,7 @@ def resimulate(plist):
         window.update_idletasks()
         window.update()
         c.delete('all')
-        time.sleep(0.00000000001)
+        #time.sleep(0.00000000001)
     window.destroy()
     return "Finished"
 
@@ -270,6 +325,20 @@ def initialize_lattice(edge, part_dist, vmag = 0):
         print(part)
     return particles
 
+def show_frame(particles):
+    window = Tk()
+    c = Canvas(master=window, bg='black',height=window_h_w, width=window_h_w)
+    c.pack()
+    window.title('Lattice')
+    window.geometry( str(window_h_w)+"x" + str(window_h_w) + "+10+10")
+    while True:
+        id_list = [0 for i in particles]
+        for i in range(0, len(particles)):
+            p = particles[i]
+            id_list[i] = Point(c, p.pos)
+        window.update_idletasks()
+        window.update()
+
 ###### Analysis #########
 
 def plot_energy(plist, calc = True):
@@ -281,8 +350,6 @@ def plot_energy(plist, calc = True):
             Elist.append(calc_energy(particles))
             dtlist.append(time_step)
             time_step += 1
-    else:
-        Elist = plist
     plt.scatter(dtlist, Elist)
     plt.title("Total Energy over Time")
     plt.ylabel("Energy (au)")
@@ -290,22 +357,165 @@ def plot_energy(plist, calc = True):
     return Elist
 
 def distr_energy(Elist):
-    fig = sns.displot(Elist, kind="hist", kde = True)
-    fig.set_axis_labels('Total Energy (au)', 'Counts')
+    fig1 = sns.displot(Elist, kind="hist", kde = True, bins=100)
+    #fig = sns.displot(Elist, kind="hist")#, bins = 100)
+    fig1.set_axis_labels('Total Energy (au)', 'Counts')
+    fig1.tick_params(axis='x', labelsize="small")
+    fig1.set(title="Energy Distribution")
+    
     
 def distr_speed(plist):
     speeds = []
     for particles in tqdm(plist):
         for p in particles:
-            speeds.append(p.vel[0]**2 + p.vel[1]**2)
+            speeds.append(math.sqrt(p.vel[0]**2 + p.vel[1]**2))
     #plt.hist(speeds, 200)
     #plt.title("Speed Distribution")
     #plt.xlabel("Speed (au)")
     #plt.ylabel("Frequency")
     fig = sns.displot(speeds, kind='hist', kde=True)
     fig.set_axis_labels('Speed (au)', 'Counts')
+    fig.set(title="Speed Distribution")
     return speeds
     
+
+def plot_temp(plist):
+    KElist = []
+    dtlist = []
+    time_step = 0
+    for particles in tqdm(plist):
+        KEtotal = 0
+        for p in particles:
+            KEtotal += (p.vel[0]**2 + p.vel[1]**2)/2
+        KElist.append(KEtotal/len(particles))
+        dtlist.append(time_step)
+        time_step += 1
+    plt.scatter(dtlist, KElist)
+    plt.title("Temperature over Time")
+    plt.ylabel("Temperature (au)")
+    plt.xlabel("Time Steps")
+    
+def distr_temp(plist):
+    KElist = []
+    dtlist = []
+    time_step = 0
+    for particles in tqdm(plist):
+        KEtotal = 0
+        for p in particles:
+            KEtotal += (p.vel[0]**2 + p.vel[1]**2)/2
+        KElist.append(KEtotal/len(particles))
+        dtlist.append(time_step)
+        time_step += 1
+    fig = sns.displot(KElist, kind='hist', kde=True)
+    fig.set_axis_labels('Temperature (au)', 'Counts')
+    fig.set(title="Temperature Distribution")
+    
+def distr_vel(plist):
+    vecs = {'x_comp':[], 'y_comp':[]}
+    for particles in plist:
+        for p in particles:
+            vecs['x_comp'].append(p.vel[0])
+            vecs['y_comp'].append(p.vel[1])
+    #fig = sns.displot(vecs, x='x_comp', y='y_comp', cbar=True)
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    plt.hist2d(vecs['x_comp'], vecs['y_comp'], bins=100, cmap='RdBu_r', norm=LogNorm())
+    ax.set_aspect('equal')
+    ax.set_xlabel('$v_x (au)$')
+    ax.set_ylabel('$v_y (au)$')
+    plt.colorbar(label="Counts")
+    plt.title("Velocity Distribution")
+    
+def plot_sq_dist(plist):
+    p1 = 0
+    p2 = int(len(plist[0])/2) - 1
+    sq_dist = []
+    mean_sq = []
+    dtlist= []
+    time_step=0
+    for particles in tqdm(plist):
+        dtlist.append(time_step)
+        dif_x = abs(particles[p1].pos[0] - particles[p2].pos[0])
+        dif_y = abs(particles[p1].pos[1] - particles[p2].pos[1])
+        if dif_x > r0_w/2:
+           dif_x -= r0_w
+        elif dif_x < -r0_w/2:
+            dif_x += r0_w
+        if dif_y > r0_w/2:
+            dif_y -= r0_w
+        elif dif_y < -r0_w/2:
+            dif_y += r0_w
+        sq_dist.append(dif_x**2 + dif_y**2)
+        mean_sq.append(np.mean(sq_dist))
+        time_step += 1
+    fig, axs = plt.subplots(2)
+    axs[0].scatter(dtlist, sq_dist)
+    axs[0].set_title("(Mean) Squared Distance over Time")
+    axs[0].set_xlabel("Time Steps")
+    axs[0].set_ylabel(r'$r^2$')
+    axs[1].scatter(dtlist, mean_sq)
+    #axs[1].set_title("Mean Squared Distance over Time")
+    axs[1].set_xlabel("Time Steps")
+    axs[1].set_ylabel(r'$\langle r^2 \rangle$')
+    return sq_dist, mean_sq
+
+def plot_mean_sq(plist):
+    p1 = 0
+    p2 = int(len(plist[0])/2)-5
+    p1_0 = plist[0][p1]
+    p2_0 = plist[0][p2]
+    SD1 = []
+    SD2 = []
+    MSD1 = []
+    MSD2 = []
+    dtlist = []
+    time_step = 0
+    for particles in tqdm(plist):
+        dtlist.append(time_step)
+        time_step += 1
+        p1_x = abs(particles[p1].pos[0] - p1_0.pos[0])
+        p1_y = abs(particles[p1].pos[1] - p1_0.pos[1])
+        SD1.append(p1_x**2 + p1_y**2)
+        p2_x = abs(particles[p2].pos[0] - p2_0.pos[0])
+        p2_y = abs(particles[p2].pos[1] - p2_0.pos[1])
+        SD2.append(p2_x**2 + p2_y**2)
+        MSD1.append(np.mean(SD1))
+        MSD2.append(np.mean(SD2))
+    fig, axs = plt.subplots(2)
+    fig.suptitle("Mean Squared Displacement")
+    axs[0].scatter(dtlist, MSD1)
+    axs[0].set_title("Particle 1")
+    axs[0].set_xlabel("Time Steps")
+    axs[0].set_ylabel(r'$\langle r^2 \rangle$')
+    axs[1].scatter(dtlist, MSD2)
+    axs[1].set_title("Particle 2")
+    axs[1].set_xlabel("Time Steps")
+    axs[1].set_ylabel(r'$\langle r^2 \rangle$')
+    plt.tight_layout()
+    
+    
+def fit_MB(speeds):
+    speed_dict = dict()
+    bins = 100
+    min_s = np.min(speeds)
+    max_s = np.max(speeds)
+    print(min_s, max_s)
+    step = 1
+    print(step)
+    for i in range(bins):
+        speed_dict[i*step] = 0
+    for s in speeds:
+        speed_dict[math.trunc(s/step)] += 1
+        
+    def func(x, a, b):
+        return a*x**2*np.exp(b*x**2)
+    xdata = list(speed_dict.keys())
+    ydata = list(speed_dict.values())
+    plt.scatter(xdata, ydata)
+    model = Model(func)
+    
+    return speed_dict
+
 
 ###### Tests ##########
 def test_1_static():
@@ -326,4 +536,19 @@ def test_2_static():
 def test_2_fast():
     ps = initialize_lattice(10, 1, vmag = 10)
     plist = bake_sim(ps)
+    return plist
+
+def test_3_static():
+    ps = initialize_lattice(10, 1)
+    plist = show_melt(ps)
+    return plist
+
+def test_3_solid(ps):
+    ps1 = ps.copy()
+    plist = show_melt(ps1)
+    return plist
+
+def test_4_MB():
+    ps = initialize_lattice(10, 3, vmag = 25)
+    plist = show_melt(ps)
     return plist
